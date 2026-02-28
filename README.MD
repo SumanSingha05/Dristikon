@@ -1,0 +1,1 @@
+Dristikon is a multi-threaded, real-time cognitive assistant designed to bridge the gap between human intuition and machine vision. By fusing an ultra-low-latency "Reflex Layer" with a deep-reasoning "Cognitive Brain" and "Spatial Memory," it provides visually impaired users with a profound understanding of their surroundings and life-saving obstacle alerts.
