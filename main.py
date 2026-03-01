@@ -32,7 +32,7 @@ c.execute('''CREATE TABLE IF NOT EXISTS reminders
              (msg TEXT, remind_time TEXT, status TEXT)''')
 conn.commit()
 
-# Objects that the AI should ignore completely
+
 IGNORED_OBJECTS = {'wine glass', 'dog', 'hot dog', 'cat', 'bird', 'horse', 'sheep', 'cow', }
 
 memory_tracker = {}
