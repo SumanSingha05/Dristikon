@@ -6,6 +6,16 @@ import time
 from datetime import datetime
 import subprocess
 import sys
+import os
+from twilio.rest import Client
+from dotenv import load_dotenv
+
+# Load env variables
+load_dotenv()
+TWILIO_SID = os.getenv("TWILIO_ACCOUNT_SID")
+TWILIO_TOKEN = os.getenv("TWILIO_AUTH_TOKEN")
+TWILIO_PHONE = os.getenv("TWILIO_PHONE_NUMBER")
+FRIEND_PHONE = os.getenv("FRIEND_PHONE_NUMBER")
 
 model = YOLO('yolov8n.pt')
 conn = sqlite3.connect('drishti_memory.db')
@@ -21,6 +31,9 @@ c.execute('''CREATE TABLE IF NOT EXISTS memory
 c.execute('''CREATE TABLE IF NOT EXISTS reminders 
              (msg TEXT, remind_time TEXT, status TEXT)''')
 conn.commit()
+
+# Objects that the AI should ignore completely
+IGNORED_OBJECTS = {'wine glass', 'dog', 'hot dog', 'cat', 'bird', 'horse', 'sheep', 'cow'}
 
 memory_tracker = {}
 
@@ -86,6 +99,39 @@ def check_reminders():
         c.execute("UPDATE reminders SET status='done' WHERE rowid=?", (rowid,))
         conn.commit()
 
+def send_sos():
+    speak("SOS mode activated. Sending emergency message to your contact.")
+    
+    if not all([TWILIO_SID, TWILIO_TOKEN, TWILIO_PHONE, FRIEND_PHONE]):
+        print("SOS Error: Missing Twilio credentials in .env file.")
+        speak("Failed to send SOS. Missing configuration.")
+        return
+
+    # Grab the last known location in the main thread to avoid SQLite threading errors
+    c.execute("SELECT surroundings FROM memory ORDER BY timestamp DESC LIMIT 1")
+    res = c.fetchone()
+    last_loc = res[0] if res else "Unknown"
+    current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    def _sos_thread(loc, time_str):
+        try:
+            client = Client(TWILIO_SID, TWILIO_TOKEN)
+            
+            msg_body = f"SOS ALERT from Drishti Setu!\nUser needs immediate assistance.\nTime: {time_str}\nLast seen near: {loc}"
+            
+            message = client.messages.create(
+                body=msg_body,
+                from_=TWILIO_PHONE,
+                to=FRIEND_PHONE
+            )
+            print(f"SOS sent successfully! SID: {message.sid}")
+        except Exception as e:
+            print(f"Failed to send SOS SMS: {e}")
+
+    # Run in background to avoid freezing the system
+    import threading
+    threading.Thread(target=_sos_thread, args=(last_loc, current_time), daemon=True).start()
+
 cap = cv2.VideoCapture(0)
 speak("Drishti Setu system initialized. Passive scanning active.")
 
@@ -104,6 +150,9 @@ try:
 
             for box in r.boxes:
                 label = model.names[int(box.cls[0])]
+                if label in IGNORED_OBJECTS:
+                    continue  # Skip ignored objects completely
+                
                 current_time = time.time()
                 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
@@ -129,6 +178,7 @@ try:
         if key == ord('q'): break
         elif key == ord('s'): search_memory()
         elif key == ord('r'): set_reminder()
+        elif key == ord('h'): send_sos()
         
         current_time_sec = time.time()
         if (current_time_sec - last_reminder_check) > 1.0:
