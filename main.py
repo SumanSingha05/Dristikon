@@ -33,9 +33,10 @@ c.execute('''CREATE TABLE IF NOT EXISTS reminders
 conn.commit()
 
 # Objects that the AI should ignore completely
-IGNORED_OBJECTS = {'wine glass', 'dog', 'hot dog', 'cat', 'bird', 'horse', 'sheep', 'cow'}
+IGNORED_OBJECTS = {'wine glass', 'dog', 'hot dog', 'cat', 'bird', 'horse', 'sheep', 'cow', }
 
 memory_tracker = {}
+warning_tracker = {}
 
 def speak(text):
     print(f"AI: {text}")
@@ -157,8 +158,21 @@ try:
                 
                 x1, y1, x2, y2 = map(int, box.xyxy[0])
                 width = x2 - x1
-                if width > (frame.shape[1] * 0.5):
-                    cv2.putText(frame, "OBSTACLE ALERT", (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+                
+                # Draw a bounding box around all detected (non-ignored) objects
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                
+                # Show the object's label on the screen
+                if width > (frame.shape[1] * 0.3):
+                    # If it's very large, show a prominent red warning instead of green
+                    cv2.putText(frame, f"{label.capitalize()}", (x1, max(30, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2)
+                    
+                    # Also speak a warning, throttled to once every 10 seconds per object
+                    if label not in warning_tracker or (current_time - warning_tracker[label]) > 10:
+                        speak(f"{label} is in front of you")
+                        warning_tracker[label] = current_time
+                else:
+                    cv2.putText(frame, f"{label.capitalize()}", (x1, max(20, y1 - 10)), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
 
                 if label not in memory_tracker or (current_time - memory_tracker[label]) > 30:
                     crop = frame[y1:y2, x1:x2]
